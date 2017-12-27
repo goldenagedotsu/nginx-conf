@@ -1,0 +1,56 @@
+server {
+    server_name jenkins.andreev.cx;
+    return 301 https://$host$request_uri;
+#    rewrite ^/(.*) https://jenkins.andreev.cx/$1 permanent;
+}
+server {
+    listen  443 ssl http2;
+    server_name  jenkins.andreev.cx;
+
+    access_log /var/log/nginx/jenkins.andreev.cx.log;
+    error_log /var/log/nginx/jenkins.andreev.cx.log;
+    client_max_body_size 100M;
+
+    ssl_certificate /var/lib/acme/live/jenkins.andreev.cx/fullchain;
+    ssl_certificate_key /var/lib/acme/live/jenkins.andreev.cx/privkey;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_prefer_server_ciphers on;
+    ssl_dhparam /etc/ssl/certs/dhparam.pem;
+    ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH";
+    ssl_ecdh_curve secp384r1;
+    ssl_session_tickets off;
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver_timeout 5s;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+   #позволяем серверу прикреплять OCSP-ответы, тем самым уменьшая время загрузки страниц у пользователей
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    add_header Strict-Transport-Security max-age=15768000;
+
+    ignore_invalid_headers off; #pass through headers from Jenkins which are considered invalid by Nginx server.
+    location ~ "^/static/[0-9a-fA-F]{8}\/(.*)$" {
+    rewrite "^/static/[0-9a-fA-F]{8}\/(.*)" /$1 last;
+    }
+
+#    location / {
+#        root   /usr/share/nginx/html;
+#        index  index.html index.htm;
+#    }
+
+    location / {
+
+      proxy_set_header        Host $host;
+      proxy_set_header        X-Real-IP $remote_addr;
+      proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header        X-Forwarded-Proto $scheme;
+
+      proxy_pass          http://andreevm.ddns.net:8080;
+      proxy_read_timeout  90;
+      proxy_redirect      http://andreevm.ddns.net:8080 https://jenkins.andreev.cx;
+    }
+    
+    location /.well-known/acme-challenge/ {
+              proxy_pass http://acmetool;
+    }
+}
